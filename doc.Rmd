@@ -131,12 +131,6 @@ A variáveis de interesse que escolhi foram lcavol, svi e lcp. Para o treinament
 
 ```{r regressao_linear}
 
-#definindo variáveis
-volume <- dados_treino$lcavol
-invasao <- dados_treino$svi
-penetracao <- dados_treino$lcp
-psa <- dados_treino$lpsa
-
 #obtendo a regressão linear
 reg_linear <- lm(lpsa ~ lcavol+svi+lcp, data = dados_treino)
 
