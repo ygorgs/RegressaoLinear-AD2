@@ -1,0 +1,203 @@
+---
+title: "Problema 3.2"
+author: "Ygor Santos"
+date: "01 de abril de 2016"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+#Bibliotecas Usadas
+library(gmodels)
+library(ggplot2)
+library(gridExtra)
+library(corrplot)
+library(dplyr)
+library(caret)
+```
+
+## Objetivo da Análise
+
+  Antígeno Prostático Específico (PSA) é uma substância produzida pelas células da glândula prostática. O PSA é encontrado principalmente no sêmen, mas uma pequena quantidade é também encontrada no sangue. A maioria dos homens saudáveis têm níveis menores de 4ng/ml de sangue. A chance de um homem desenvolver câncer de próstata aumenta proporcionalmente com o aumento do nível de PSA (ver <http://www.oncoguia.org.br/conteudo/antigeno-prostatico-especifico-psa-no-diagnostico-do-cancer-de-prostata/1202/289/>).
+
+  A atividade para este checkpoint será prever o nível do PSA em pacientes através de uma regressão linear.
+
+
+###Leitura dos dados
+
+```{r dados}
+
+dados <- read.table("dados.txt", header=T, dec=".")
+
+summary(dados)
+
+```
+  Os dados utilizados neste problema são referentes a exames em pacientes homens afim de identificar sintomas de câncer de prostata. O dataset é composto por dez variáveis, onde uma delas (psa) será considerada nossa variável resposta. Nosso objetivo final será predizer a variável psa a partir dos preditores disponíveis.
+
+  Como campos do dataset, temos:
+  ------
+   vol: volume do câncer 
+   weight:  peso do paciente
+   age: idade do paciente
+   bph: hiperplasia prostática benigna
+   svi: invasão das vesículas seminais
+   cp: penetração capsular
+   gleason: escore Gleason
+   pgg45: percentagem escore Gleason 4 ou 5
+   psa: antígeno específico da próstata (esta é a variável resposta).
+
+Obs.: A variável ‘train’ será utilizada para divisão do dataset em treino e teste.
+Obs2.: Observe que foi aplicada a função log em algumas variáveis.  
+
+
+###Particionamento dos dados
+
+Vamos separar os dados para treino e testes de acordo com a váriavel train.
+
+```{r particionamento}
+
+#dados de treino
+dados_treino <- filter(dados, train == TRUE)
+
+#dados de teste
+dados_teste <- filter(dados, train == FALSE)
+
+```
+
+###Analise descritiva dos dados
+
+Abaixo estão os scatter plots mostrando a dispersão dos valores de cada váriavel com váriavel psa (que será a váriavel resposta):
+
+```{r analiseDescritiva, echo=FALSE}
+
+#Criando gráficos
+plot_vol <- qplot(dados$lcavol, dados$lpsa, xlab = "lcavol", ylab ="PSA")
+plot_weight <- qplot(dados$lweight, dados$lpsa, xlab = "lweight", ylab ="PSA")
+plot_age <- qplot(dados$age, dados$lpsa, xlab = "age", ylab ="PSA")
+plot_bph <- qplot(dados$lbph, dados$lpsa, xlab = "lbph", ylab ="PSA")
+plot_svi <- qplot(dados$svi, dados$lpsa, xlab = "svi", ylab ="PSA")
+plot_cp <- qplot(dados$lcp, dados$lpsa, xlab = "lcp", ylab ="PSA")
+plot_gleason <- qplot(dados$gleason, dados$lpsa, xlab = "gleason", ylab ="PSA")
+plot_pgg45 <- qplot(dados$pgg45, dados$lpsa, xlab = "pgg45", ylab ="PSA")
+
+#Plotando quatro deles
+grid.arrange(plot_vol, plot_weight, plot_age, plot_bph, ncol=2, nrow=2)
+
+#Plotando quatro deles 
+grid.arrange(plot_svi, plot_cp, plot_gleason, plot_pgg45, ncol=2, nrow=2)
+
+```
+
+###Analise de correlação das variáveis
+
+Abaixo estão as correlações entre as váriaveis numéricas presente nos dados. 
+
+```{r analiseCorrelacao1}
+
+nums <- sapply(dados, is.numeric)
+cor(dados[,nums])
+
+```
+
+Graficamente:
+
+```{r analiseCorrelacao2, echo=FALSE}
+
+correlations <- cor(dados[,nums])
+corrplot(correlations, order="hclust", type="lower")
+
+```
+Com isso, nós podemos visualizar o nivel correlação da variavel lpsa com as demais preditores e escolher os preditores que serão usados no modelo. lcavol possue uma correlação positiva forte com a variável resposta (lpsa) por isso ela será importante no modelo, serão usados também as variáveis svi e lcp.
+
+
+###Conclusões das analises
+
+#####**1. Há evidência de relação entre os preditores e a variável alvo?**
+Sim, de acordo com o gráfico de correlações, vemos que todos os preditores possuem algum tipo de relação com a variável resposta ipsa.
+
+#####**2. Havendo relação, quão forte é essa relação?**
+O nível dessa relação vária de acordo com o preditor. As variáveis 'iweight', 'ibph' e 'glesson' possuem uma relação fraca com a variável ipsa; 'svi e 'icp' possuem um releção moderada e 'lcavol' possue uma relação forte (não tão forte quanto o ideal).
+
+#####**3.  Que variável parece contribuir mais?**
+'lcavol' é a que mais parece que irá contribuir com o modelo por causa da sua correlação.
+
+#####**4. A relação sugere um modelo de regressão linear?**
+Sim, pois há algumas váriaveis que possuem uma boa relação com a variável a variável resposta e que podem ser usadas no modelo.
+
+
+###Treinando o modelo
+
+A variáveis de interesse que escolhi foram lcavol, svi e lcp. Para o treinamento do modelo, serão usados os dados de treino (dados_treino).
+
+```{r regressao_linear}
+
+#definindo variáveis
+volume <- dados_treino$lcavol
+invasao <- dados_treino$svi
+penetracao <- dados_treino$lcp
+psa <- dados_treino$lpsa
+
+#obtendo a regressão linear
+reg_linear <- lm(lpsa ~ lcavol+svi+lcp, data = dados_treino)
+
+#sumário do modelo
+summary(reg_linear)
+
+```
+
+###Realizando predições
+
+Para obter as predições do modelo, serão usados os dados de teste (dados_teste)
+
+```{r predicoes}
+
+#predições
+predicoes <- predict(reg_linear, select(dados_teste,lcavol, svi, lcp))
+
+#dataframe com as predições
+lm_predicoes <- data.frame(pred = predicoes, obs = dados_teste$lpsa)
+
+```
+
+Gráfico de valores observados versus valores previstos:
+
+```{r graficoDiagnostico1}
+
+ggplot(lm_predicoes, aes(x = pred, y = obs)) + geom_point(alpha = 0.5, position = position_jitter(width=0.2)) + geom_abline(colour = "blue") + ggtitle("Observados X Previstos (validação)")
+
+```
+
+###Resíduos na validação
+
+Obtendo os resíduos.
+
+```{r residuos}
+
+#resíduos
+residuos = dados_teste$lpsa - predicoes
+
+```
+
+Gráfico de predições versus resíduous:
+
+```{r graficoDiagnostico2}
+
+qplot(predicoes, residuos, ylab = "Resíduos", xlab = "Predições") +
+  geom_hline(yintercept = 0, color='blue') + ggtitle("Resíduos x Predição")
+
+```
+
+###Calculando o RMSE
+
+```{r rmse}
+
+#mean squared error
+RMSE(predicoes, dados_teste$lpsa)
+
+```
+
+###Conclusão
+Analisando os gráficos, vemos que a regressão linear se ajustou bem aos valores de testes. O modelo também produziu um RMSE baixo, o que indica que o modelo usado é uma boa solução para o problema.
+
+---
+
