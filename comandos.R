@@ -5,7 +5,10 @@ library(gridExtra)
 library(corrplot)
 library(dplyr)
 library(caret)
+library(lars)
+library(elasticnet)
 
+#leitura dos dados
 dados <- read.table("dados.txt", header=T, dec=".")
 
 #dados de treino
@@ -54,5 +57,35 @@ qplot(predicoes, residuos, ylab = "Resíduos", xlab = "Predições") +
 #mean squared error
 RMSE(predicoes, dados_teste$lpsa)
 
+#modelo LASSO para seleção de preditores
+lasso.fit <- train(lpsa ~ ., data=select(dados_treino, lcavol, lweight, age, lbph, svi, lcp, gleason, pgg45, lpsa), method='lasso', metric='RMSE',tuneLength=10)
+
+plot(lasso.fit)
+
+#importância das variáveis para o modelo LASSO
+plot(varImp(lasso.fit))
+
+#previsões com o modelo LASSO
+lasso_predicoes <- predict(lasso.fit, select(dados_teste,lcavol, lweight, age, lbph, svi, lcp, gleason, pgg45))
+
+la_predicoes <- data.frame(pred = lasso_predicoes, obs = dados_teste$lpsa)
+
+ggplot(la_predicoes, aes(x = pred, y = obs)) + geom_point(alpha = 0.5, position = position_jitter(width=0.2)) + geom_abline(colour = "blue") + ggtitle("Observados X Previstos (LASSO)")
+
+#RMSE do modelo LASSO
+RMSE(lasso_predicoes, dados_teste$lpsa)
+
+#comparando os modelos
+compare <- lm_predicoes
+lm_predicoes$model <- "RL"
+la_predicoes$model <- "LASSO"
+
+compare <- rbind(lm_predicoes, la_predicoes)
+
+ggplot(compare, aes(x = pred, y = obs)) + 
+  geom_point(alpha = 0.5, position = position_jitter(width=0.2)) + 
+  facet_grid(. ~ model) + 
+  geom_abline() +
+  ggtitle("Observado x Previsão (validação)")
 
 

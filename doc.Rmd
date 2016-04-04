@@ -14,6 +14,8 @@ library(gridExtra)
 library(corrplot)
 library(dplyr)
 library(caret)
+library(lars)
+library(elasticnet)
 ```
 
 ## Objetivo da Análise
@@ -124,6 +126,7 @@ O nível dessa relação vária de acordo com o preditor. As variáveis 'iweight
 #####**4. A relação sugere um modelo de regressão linear?**
 Sim, pois há algumas váriaveis que possuem uma boa relação com a variável a variável resposta e que podem ser usadas no modelo.
 
+##Regressão Linear
 
 ###Treinando o modelo
 
@@ -139,9 +142,9 @@ summary(reg_linear)
 
 ```
 
-###Realizando predições
+###Realizando previsões
 
-Para obter as predições do modelo, serão usados os dados de teste (dados_teste)
+Para obter as previsões do modelo, serão usados os dados de teste (dados_teste)
 
 ```{r predicoes}
 
@@ -190,8 +193,77 @@ RMSE(predicoes, dados_teste$lpsa)
 
 ```
 
+##Modelo LASSO
+
+###Seleção de preditores
+A seleção dos preditores que irão ser utilizados no modelo LASSO será feita através de validação cruzada.
+
+```{r LASSO}
+
+lasso.fit <- train(lpsa ~ ., data=select(dados_treino, lcavol, lweight, age, lbph, svi, lcp, gleason, pgg45, lpsa), method='lasso', metric='RMSE',tuneLength=10)
+
+plot(lasso.fit)
+
+lasso.fit
+
+```
+
+###Importância das variáveis para o modelo LASSO
+
+```{r variaveisLASSO}
+
+plot(varImp(lasso.fit))
+
+```
+
+###Realizando previsões com o modelo LASSO
+
+```{r previsoesLASSO}
+
+lasso_predicoes <- predict(lasso.fit, select(dados_teste,lcavol, lweight, age, lbph, svi, lcp, gleason, pgg45))
+
+la_predicoes <- data.frame(pred = lasso_predicoes, obs = dados_teste$lpsa)
+
+ggplot(la_predicoes, aes(x = pred, y = obs)) + geom_point(alpha = 0.5, position = position_jitter(width=0.2)) + geom_abline(colour = "blue") + ggtitle("Observados X Previstos (LASSO)")
+
+```
+
+###Calculando o RMSE no modelo LASSO
+
+```{r rmseLASSO}
+
+#mean squared error
+RMSE(lasso_predicoes, dados_teste$lpsa)
+
+```
+
+##Comparando os modelos
+
+Agora, iremos comparar os resultados obtidos entre os dois modelos utilizando o RMSE como métrica de avaliação
+
+```{r compare}
+
+lm_predicoes$model <- "RL"
+la_predicoes$model <- "LASSO"
+
+compare <- rbind(lm_predicoes, la_predicoes)
+
+ggplot(compare, aes(x = pred, y = obs)) + 
+  geom_point(alpha = 0.5, position = position_jitter(width=0.2)) + 
+  facet_grid(. ~ model) + 
+  geom_abline() +
+  ggtitle("Observado x Previsão (validação)")
+
+#RMSE - Regressão Linear
+RMSE(predicoes, dados_teste$lpsa)
+
+#RMSE - Modelo LASSO
+RMSE(lasso_predicoes, dados_teste$lpsa)
+
+```
+
 ###Conclusão
-Analisando os gráficos, vemos que a regressão linear se ajustou bem aos valores de testes. O modelo também produziu um RMSE baixo, o que indica que o modelo usado é uma boa solução para o problema.
+Analisando os resultados apresentados pelos dois modelos, vemos que ambos se ajustaram bem aos valores de testes usados para fazer previsões. Os RMSE's produzidos pelos dois modelos são baixos e praticamente iguais. Isso nos mostra que os modelos não são tão diferentes um do outro, pois produzem resultados semelhantes.
 
 ---
 
